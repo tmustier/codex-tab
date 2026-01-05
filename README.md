@@ -4,6 +4,8 @@ macOS-only `codex` launcher that updates your terminal tab title based on Codex 
 
 It binds to the correct session log by inspecting the `codex` process’ open files via `libproc` (no `lsof`).
 
+Not on macOS? Use the cross-platform Python version: [`codex-title`](https://github.com/tmustier/codex-title).
+
 ## Install
 
 Build + install to `~/.local/bin`:
