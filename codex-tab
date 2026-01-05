@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+BIN="$ROOT/.build/debug/codex-tab"
+
+NEEDS_BUILD=0
+if [ ! -x "$BIN" ]; then
+  NEEDS_BUILD=1
+elif find "$ROOT/Sources" "$ROOT/Package.swift" -newer "$BIN" -print -quit 2>/dev/null | grep -q .; then
+  NEEDS_BUILD=1
+fi
+
+if [ "$NEEDS_BUILD" -eq 1 ]; then
+  (cd "$ROOT" && swift build -c debug --product codex-tab)
+fi
+
+exec "$BIN" "$@"
