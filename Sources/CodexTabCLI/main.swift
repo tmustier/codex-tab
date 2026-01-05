@@ -7,11 +7,7 @@ enum ExitCode {
     static let failure: Int32 = 1
 }
 
-let defaultNewTitle = "codex:new"
-let defaultRunningTitle = "codex:running..."
-let defaultDoneTitle = "codex:✅"
-let defaultNoCommitTitle = "codex:🚧"
-let defaultTimeoutTitle = "codex:🛑"
+let defaultTitles = CodexTabTitles.defaults
 let defaultInactiveTimeoutSeconds: TimeInterval = 120.0
 let toolName = "codex-tab"
 
@@ -66,20 +62,17 @@ final class TitleWriter: @unchecked Sendable {
 
 func title(
     for state: CodexTitleState,
-    newTitle: String,
-    runningTitle: String,
-    doneTitle: String,
-    noCommitTitle: String
+    titles: CodexTabTitles
 ) -> String {
     switch state {
     case .new:
-        return newTitle
+        return titles.newTitle
     case .running:
-        return runningTitle
+        return titles.runningTitle
     case .doneCommitted:
-        return doneTitle
+        return titles.doneTitle
     case .doneNoCommit:
-        return noCommitTitle
+        return titles.noCommitTitle
     }
 }
 
@@ -114,12 +107,9 @@ func printUsage() {
       --start <iso|epoch> Start time for log selection (default: now)
       --timeout <secs>    Seconds to wait for pid log before fallback (default: 8)
       --poll <secs>       Poll interval while waiting (default: 0.2)
-      --new-title <text>  Title to set on session start (default: \(defaultNewTitle))
-      --running-title <text> Title to set while running (default: \(defaultRunningTitle))
-      --done-title <text> Title to set on completion with commit (default: \(defaultDoneTitle))
-      --no-commit-title <text> Title to set on completion without commit (default: \(defaultNoCommitTitle))
+      --titles <spec>     Override titles (format: 'new|running|done|no_commit|timeout' OR 'key=value,...')
+                         Defaults: new=\(defaultTitles.newTitle) running=\(defaultTitles.runningTitle) done=\(defaultTitles.doneTitle) no_commit=\(defaultTitles.noCommitTitle) timeout=\(defaultTitles.timeoutTitle)
       --inactive-timeout <secs> Seconds with no log output to show timeout (default: \(defaultInactiveTimeoutSeconds))
-      --timeout-title <text> Title to show when inactive timeout triggers (default: \(defaultTimeoutTitle))
       --codex-home <path> Override ~/.codex for fallback lookup
       --print-log-path    Print log_path/source once discovered
       --quiet             Suppress log_path/source output (overrides --print-log-path)
@@ -287,11 +277,7 @@ func runTitleWatcher(
     timeout: TimeInterval,
     pollInterval: TimeInterval,
     codexHome: URL?,
-    newTitle: String,
-    runningTitle: String,
-    doneTitle: String,
-    noCommitTitle: String,
-    timeoutTitle: String,
+    titles: CodexTabTitles,
     inactiveTimeoutSeconds: TimeInterval,
     stopFlag: StopFlag,
     titleWriter: TitleWriter
@@ -308,16 +294,13 @@ func runTitleWatcher(
 
     func applyTitle(_ next: CodexTitleState) {
         if overlay.timeoutActive, next == .running {
-            titleWriter.set(timeoutTitle)
+            titleWriter.set(titles.timeoutTitle)
             return
         }
         titleWriter.set(
             title(
                 for: next,
-                newTitle: newTitle,
-                runningTitle: runningTitle,
-                doneTitle: doneTitle,
-                noCommitTitle: noCommitTitle
+                titles: titles
             )
         )
     }
@@ -413,12 +396,8 @@ var codexHome: URL?
 var quiet = false
 var printLogPath = false
 var debug = false
-var newTitle = defaultNewTitle
-var runningTitle = defaultRunningTitle
-var doneTitle = defaultDoneTitle
-var noCommitTitle = defaultNoCommitTitle
+var titles = defaultTitles
 var inactiveTimeoutSeconds = defaultInactiveTimeoutSeconds
-var timeoutTitle = defaultTimeoutTitle
 
 var index = 0
 while index < args.count {
@@ -460,38 +439,20 @@ while index < args.count {
             exit(ExitCode.usage)
         }
         pollInterval = value
-    case "--new-title":
+    case "--titles":
         index += 1
         guard index < args.count else {
-            fputs("Missing --new-title value\n", stderr)
+            fputs("Missing --titles value\n", stderr)
             printUsage()
             exit(ExitCode.usage)
         }
-        newTitle = args[index]
-    case "--running-title":
-        index += 1
-        guard index < args.count else {
-            fputs("Missing --running-title value\n", stderr)
+        do {
+            titles = try titles.applyingSpec(args[index])
+        } catch {
+            fputs("Invalid --titles value: \(error)\n", stderr)
             printUsage()
             exit(ExitCode.usage)
         }
-        runningTitle = args[index]
-    case "--done-title":
-        index += 1
-        guard index < args.count else {
-            fputs("Missing --done-title value\n", stderr)
-            printUsage()
-            exit(ExitCode.usage)
-        }
-        doneTitle = args[index]
-    case "--no-commit-title":
-        index += 1
-        guard index < args.count else {
-            fputs("Missing --no-commit-title value\n", stderr)
-            printUsage()
-            exit(ExitCode.usage)
-        }
-        noCommitTitle = args[index]
     case "--inactive-timeout":
         index += 1
         guard index < args.count, let value = parseDouble(args[index]) else {
@@ -500,14 +461,6 @@ while index < args.count {
             exit(ExitCode.usage)
         }
         inactiveTimeoutSeconds = value
-    case "--timeout-title":
-        index += 1
-        guard index < args.count else {
-            fputs("Missing --timeout-title value\n", stderr)
-            printUsage()
-            exit(ExitCode.usage)
-        }
-        timeoutTitle = args[index]
     case "--codex-home":
         index += 1
         guard index < args.count else {
@@ -558,7 +511,7 @@ if interactive && !printLogPath {
 
 let titleWriter = TitleWriter()
 if interactive {
-    titleWriter.set(newTitle)
+    titleWriter.set(titles.newTitle)
 }
 
 guard let codexPid = spawnCodex(executable: codexURL, arguments: codexArgs, cwd: cwd) else {
@@ -584,11 +537,7 @@ if interactive {
     let watcherCodexHome = codexHome
     let watcherStopFlag = stopFlag
     let watcherTitleWriter = titleWriter
-    let watcherNewTitle = newTitle
-    let watcherRunningTitle = runningTitle
-    let watcherDoneTitle = doneTitle
-    let watcherNoCommitTitle = noCommitTitle
-    let watcherTimeoutTitle = timeoutTitle
+    let watcherTitles = titles
     let watcherInactiveTimeoutSeconds = inactiveTimeoutSeconds
 
     Thread.detachNewThread {
@@ -599,11 +548,7 @@ if interactive {
             timeout: watcherTimeout,
             pollInterval: watcherPollInterval,
             codexHome: watcherCodexHome,
-            newTitle: watcherNewTitle,
-            runningTitle: watcherRunningTitle,
-            doneTitle: watcherDoneTitle,
-            noCommitTitle: watcherNoCommitTitle,
-            timeoutTitle: watcherTimeoutTitle,
+            titles: watcherTitles,
             inactiveTimeoutSeconds: watcherInactiveTimeoutSeconds,
             stopFlag: watcherStopFlag,
             titleWriter: watcherTitleWriter

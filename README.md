@@ -7,6 +7,7 @@ Small wrapper for developers with too many Codex sessions. Runs `codex` and upda
 Not on macOS? Use the cross-platform Python version: [`codex-title`](https://github.com/tmustier/codex-title).
 
 Default titles (configurable):
+Configure via `--titles` (see examples below).
 
 | State | Tab title |
 | --- | --- |
@@ -46,19 +47,19 @@ codex-tab -- --resume --last
 Customize titles:
 
 ```bash
-codex-tab --new-title 'codex:new' --running-title 'codex:thinking' --done-title 'codex:done'
+codex-tab --titles "new=codex:new,running=codex:thinking,done=codex:done"
 ```
 
 Commit-aware done title (override the default):
 
 ```bash
-codex-tab --no-commit-title 'codex:🚧' -- --resume --last
+codex-tab --titles "no_commit=codex:🚧" -- --resume --last
 ```
 
 Inactivity timeout overlay (default 120s; set `0` to disable):
 
 ```bash
-codex-tab --inactive-timeout 30 --timeout-title 'codex:🛑' -- --resume --last
+codex-tab --inactive-timeout 30 --titles "timeout=codex:🛑" -- --resume --last
 ```
 
 ## Parity with codex-title (Python)
@@ -89,6 +90,9 @@ Run tests:
 
 ```bash
 xcrun swift test
+
+# If your `xcrun` points at Command Line Tools (no XCTest.framework):
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test
 ```
 
 ## Uninstall
